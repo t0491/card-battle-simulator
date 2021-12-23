@@ -39,6 +39,10 @@ class Player:
     def play_card(self, card: int) -> int:
         self.my_hand.remove(card) # Remove that card from the player's hand, it has been played.
         self.played_card = card
+    
+    # Allocates all of the round winnings into the player's win pile/captured deck.
+    def capture_card(self, card: int) -> None:
+        self.captured_deck.append(card)
 
     def show_played_card(self) -> int:
         return self.played_card
@@ -48,6 +52,11 @@ class Player:
 
     def show_id(self) -> int:
         return self.my_id
+
+    # Copy over all of the captured cards to battle and then clear the captured.
+    def transfer_cd_to_bd(self) -> int:
+        self.my_deck = self.captured_deck
+        self.captured_deck.clear()
 
 def main() -> None:
     
@@ -66,8 +75,6 @@ def main() -> None:
     # Give them their decks as well.
     for i in range(num_players):
         player_list[i+1] = Player(i+1, split_deck[i].tolist(), None)
-
-    #print("Player 1 plays the %s card, ", p1_card)
     
     # Begin running the battle simulation.
     start_simulation(player_list)
@@ -105,25 +112,78 @@ def deck_shuffle(deck: List[int]) -> list:
     return numpy.random.shuffle(deck)
 
 def start_simulation(player_list: Dict) -> None:
-
     # Keep playing until there is 1 remaining player.
     round_counter = 1
+    # Keeps track of the current winner/highest, if size > 1 then there's a tie.
+    round_winner = []
+    # Keeps track of current winnings pool.
+    pooled_cards = []
     while len(player_list) > 1:
 
-        # Keeps track of the current winner/highest, if size > 1 then there's a tie.
-        round_winner = []
         print("### Round " + str(round_counter)+ " ###")
 
+        # Keeps track of current highest value card.
+        highest_card = 0
         # Draw and play the card here.
         for player in player_list.values():
             # Simulates playing with only top decking.
             player.draw_card() # This card enters the player's hand.
             player.play_card(player.show_hand()[0]) # Plays the first drawn card from their hand.
+            print("Player #" + str(player.show_id()) + " plays, " + str(player.show_played_card()) + "!")
+
+            # Compare the played card results here.
+            # Update the new highest card.
+            if player.show_played_card() > highest_card:
+                highest_card = player.show_played_card()
+                round_winner.clear() # Clear the array of all previous winners/ties if there's a new higher value.
+                round_winner.append(player.show_id()) # Add the updated winner to the list.
+
+            elif player.show_played_card() == highest_card:
+                round_winner.append(player.show_id()) # Add another winner into the list for a tie.
+
+            # Everyone pools their cards into the middle per play.
+            pooled_cards.append(player.show_played_card())
         
-        # Compare the played card results here.
-        highest_card = 0
-        pooled_cards = []
+        #print(round_winner)
+        if len(round_winner) > 1:
+            # Execute the tiebreaker here, perhaps recurses until the tie finally resolves.
+            round_winner = exe_tiebreaker(player_list, round_winner, pooled_cards)
+
+        # Checks to see current winnings so far.
+        print("Pooled Cards: " + str(pooled_cards))
+        print("Round Winner: " + str(round_winner[0]))
         for player in player_list.values():
+            print(player)
+
+        # Give the winner all the pooled cards.
+        for card in pooled_cards:
+            # Indexed/key'd the player using the round_winner ID.
+            player_list[round_winner[0]].capture_card(card)
+        print(player_list[round_winner[0]].show_id())
+        print(player_list[1].get_cd())
+        print(player_list[2].get_cd())
+        # Removes any players with no cards remaining.
+        eliminate_empty_players(player_list)
+
+        round_counter += 1
+        round_winner.clear() # Empty it between every round.
+        pooled_cards.clear()
+    return
+
+# Returns the ID of the tie winner, may recurse.
+# If it does recurse, the new inputted round_winner will dwindle down and remove any losers of the tiebreaker.
+def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards: List[int]) -> int:
+    print("### TIE BREAKER ###")
+    round_winner = []
+    for player in player_list.values():
+        #print(len(player_list))
+        if player.show_id() in old_round_winner:
+            # Draw and play the card here.
+            player.draw_card()
+            player.play_card(player.show_hand()[0])
+        
+            # Compare the played card results here.
+            highest_card = 0
             print("Player #" + str(player.show_id()) + " plays, " + str(player.show_played_card()) + "!")
             # Update the new highest card.
             if player.show_played_card() > highest_card:
@@ -134,28 +194,30 @@ def start_simulation(player_list: Dict) -> None:
             elif player.show_played_card() == highest_card:
                 round_winner.append(player.show_id()) # Add another winner into the list for a tie.
 
-            # If you're less than the highest card, give up your card.
-            else:
-                pooled_cards.append(player.show_played_card())
-        
-        if len(round_winner) > 1:
-            # Execute the tiebreaker here, perhaps recurses until the tie finally resolves.
-            exe_tiebreaker(player_list, round_winner)
+            pooled_cards.append(player.show_played_card())
 
-        # Check player deck/resources now. If they are 0, then the player is eliminated.
-        for players in player_list.values():
-            if players.get_bd() == 0 and players.get_cd() == 0:
-                player_list.pop(players.show_id())
-        
-        # Give the winner all the pooled cards and their played card (they "lost" their played card earlier when they played it).
-        round_counter += 1
-        break
+    if len(round_winner) > 1:
+        round_winner = exe_tiebreaker(player_list, round_winner, pooled_cards)
 
-    return
+    # Removes any players with no cards remaining.
+    eliminate_empty_players(player_list)
 
-# Returns the ID of the tie winner, may recurse.
-# If it does recurse, the new inputted round_winner will dwindle down and remove any losers of the tiebreaker.
-def exe_tiebreaker(player_list: Dict, round_winner: List[int]) -> int:
-    return
+    # In order for the recursion to stop, the returned round winner must be a size of 1.
+    return round_winner
 
+def eliminate_empty_players(player_list: Dict) -> None:
+    # Check player deck/resources now. If they are 0, then the player is eliminated.
+    to_be_elimd = []
+    for player in player_list.values():
+        if len(player.get_bd()) > 0:
+            continue
+        # If they have captured cards, turn it into their battle cards.
+        elif len(player.get_bd()) == 0 and len(player.get_cd()) > 0:
+            player.transfer_cd_to_bd()
+        # If both decks empty, eliminate.
+        elif len(player.get_bd()) == 0 and len(player.get_cd()) == 0:
+            to_be_elimd.append(player.show_id())
+
+    for i in to_be_elimd:
+        player_list.pop(i)
 main()
