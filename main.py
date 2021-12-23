@@ -9,19 +9,16 @@ import numpy
 from numpy.lib.shape_base import split
 
 
-class Player:
-    my_id = None # Used for identifying which player this is in a BR scenario once others are elim'd/deleted.
-    my_deck = [] # Contains the person's battle deck.
-    my_hand = [] # Holds the players drawn cards before playing.
-    captured_deck = [] # Points/captured cards. Will be used as battle deck once that is empty.
-    bot_ai = None # Configured for random or high value priority.
-    played_card = None
-        
+class Player: 
     # Init for the Player
     def __init__(self, my_id, my_deck, bot_ai) -> None:
-        self.my_id = my_id
-        self.my_deck = my_deck
+        self.my_id = my_id # Used for identifying which player this is in a BR scenario once others are elim'd/deleted.
+        self.my_deck = my_deck # Contains the person's battle deck.
         self.bot_ai = bot_ai
+        self.my_hand = [] # Holds the players drawn cards before playing.
+        self.captured_deck = [] # Points/captured cards. Will be used as battle deck once that is empty.
+        self.bot_ai = bot_ai # Configured for random or high value priority.
+        self.played_card = None
 
     # Returns the player's battle deck.
     def get_bd(self) -> list:
@@ -152,16 +149,12 @@ def start_simulation(player_list: Dict) -> None:
         # Checks to see current winnings so far.
         print("Pooled Cards: " + str(pooled_cards))
         print("Round Winner: " + str(round_winner[0]))
-        for player in player_list.values():
-            print(player)
 
         # Give the winner all the pooled cards.
         for card in pooled_cards:
             # Indexed/key'd the player using the round_winner ID.
-            player_list[round_winner[0]].capture_card(card)
-        print(player_list[round_winner[0]].show_id())
-        print(player_list[1].get_cd())
-        print(player_list[2].get_cd())
+            player_list[round_winner[0]].get_cd().append(card)
+
         # Removes any players with no cards remaining.
         eliminate_empty_players(player_list)
 
@@ -214,6 +207,7 @@ def eliminate_empty_players(player_list: Dict) -> None:
         # If they have captured cards, turn it into their battle cards.
         elif len(player.get_bd()) == 0 and len(player.get_cd()) > 0:
             player.transfer_cd_to_bd()
+            deck_shuffle(player.get_bd()) # Shuffle it afterwards.
         # If both decks empty, eliminate.
         elif len(player.get_bd()) == 0 and len(player.get_cd()) == 0:
             to_be_elimd.append(player.show_id())
