@@ -13,17 +13,16 @@ class Player:
     def __init__(self, my_id, my_deck, bot_ai) -> None:
         self.my_id = my_id # Used for identifying which player this is in a BR scenario once others are elim'd/deleted.
         self.my_deck = my_deck # Contains the person's battle deck.
-        self.bot_ai = bot_ai
+        self.bot_ai = bot_ai # Configured for random or high value priority.
         self.my_hand = [] # Holds the players drawn cards before playing.
-        # Set up by having each player draw 5 cards in their hand at first if strategic.
-        if self.bot_ai == 2 or self.bot_ai == 1:
+        # Set up by having each player draw 5 cards in their hand at first if it's not top-deck.
+        if self.bot_ai != 1:
             for _ in range(5):
                 self.draw_card()
         # Otherwise it doesn't matter and they'll play top-deck.
         else:
             self.draw_card()
         self.captured_deck = [] # Points/captured cards. Will be used as battle deck once that is empty.
-        self.bot_ai = bot_ai # Configured for random or high value priority.
         self.played_card = None
 
     # Returns the player's battle deck.
@@ -35,24 +34,26 @@ class Player:
         return self.captured_deck
 
     def get_ai(self) -> str:
-        if self.bot_ai == None:
+        if self.bot_ai == 1:
             return "Top-deck"
-        elif self.bot_ai == 1:
-            return "Random"
         elif self.bot_ai == 2:
+            return "Random"
+        elif self.bot_ai == 3:
             return "Highest"
+        elif self.bot_ai == None:
+            return "Real Player"
 
     # Takes the top card out of their battle deck and adds it into their hand.
     def draw_card(self) -> None:
         self.my_hand.append(self.my_deck.pop())
     
-    # Sets the inputted card as the player's played_card.
+    # Sets the inputted card as the player's played_card depending on the AI.
     def play_card(self) -> int:
-        if self.bot_ai == None: # Top-deck AI
+        if self.bot_ai == 1: # Top-deck AI
             self.played_card = self.my_hand.pop(0) # Remove the first card in hand.
-        elif self.bot_ai == 1: # Random AI
+        elif self.bot_ai == 2: # Random AI
             self.played_card = self.my_hand.pop(random.randint(0,len(self.my_hand)-1)) # Choose a random card (index) in their hand.
-        elif self.bot_ai == 2: # Highest Val AI
+        elif self.bot_ai == 3: # Highest Val AI
             """ THIS WORKS PROPERLY, I WAS CONFUSED AT FIRST SEEING THAT THE AI PLAYED A HIGHER VALUE CARD
                 THAN THE PREVIOUS ROUND, BUT IT WAS BECAUSE IT JUST DREW INTO THE HIGHER VALUE CARD.
                 e.g. ROUND 1 PLAYS: 11
@@ -62,7 +63,24 @@ class Player:
             #print(highest_card)
             self.played_card = highest_card
             self.my_hand.remove(max(self.my_hand)) # Remove that specific card from hand once played.
-    
+
+        elif self.bot_ai == None: # Real Player
+            card_choice = self.choose_card() # Obtain what card the player wants to use.
+            self.played_card = card_choice
+            self.my_hand.remove(card_choice)
+
+    # Only called when a Real Player is on their "play card" phase.
+    def choose_card(self) -> int:
+        print(self.my_hand) # Show the player their hand to choose from.
+        card_choice = input("What card would you like to play from your hand? ")
+
+        while not card_choice.isnumeric() or (card_choice.isnumeric() and not(int(card_choice) in self.my_hand)):
+            print("Please choose a real card from your hand and input its value, not index.")
+            
+            card_choice = input("What card would you like to play from your hand? ")
+
+        return int(card_choice)
+
     # Allocates all of the round winnings into the player's win pile/captured deck.
     def capture_card(self, card: int) -> None:
         self.captured_deck.append(card)
@@ -83,63 +101,95 @@ class Player:
 
 def main() -> None:
     
-    # Prompts user for # of players to setup the game.
-    num_players = acquire_players()
-
-    # Determines if we are doing top-deck or strategic.
-    ai_style = []
+    # Determines if the user wants player vs AI or have a simulated AI vs AI
     game_mode = acquire_game_mode()
 
-    # Top-deck, then there is no AI choice pattern.
-    if game_mode == 1:
-        for i in range(num_players):
-            ai_style.append(None)
-    # Strategic, we allocate them as Random(1) or Highest Value(2) then.
-    elif game_mode == 2:
-        for i in range(num_players):
-            ai_style.append(random.randint(1,2))
+    # Prompts user for # of playersbo to setup the game.
+    num_bots = acquire_bots(game_mode)
 
     # Generates the deck based on # of players + shuffles it.
-    game_deck = create_deck(num_players)
+    if game_mode == 1:
+        total_players = num_bots + 1 # Plus the user themself.
+    elif game_mode == 2:
+        total_players = num_bots
+    
+    # Determines if we are doing top-deck or strategic.
+    ai_style = []
+    ai_type = acquire_ai_type()
+
+    # Top-deck(1), then there is no AI choice pattern.
+    if ai_type == 1:
+        for i in range(total_players):
+            ai_style.append(1)
+    # Strategic, we allocate them as Random(2) or Highest Value(3) then.
+    elif ai_type == 2:
+        for i in range(total_players):
+            ai_style.append(random.randint(2,3))
+
+    game_deck = create_deck(total_players)
     
     # Split the deck into equal parts for the players.
-    split_deck = numpy.array_split(game_deck, num_players)
+    split_deck = numpy.array_split(game_deck, total_players)
 
     # Initialize a dictionary containing all players, we Key them with their IDs.
     player_list = {}
 
-    # Give them their decks as well.
-    for i in range(num_players):
-        player_list[i+1] = Player(i+1, split_deck[i].tolist(), ai_style[i])
+    # Give them their decks as well. User player will be player_list[1].
+    for i in range(total_players):
+        if game_mode == 1 and i == 0: # Init the user player specifically for a bot_ai of "None"
+            player_list[i+1] = Player(i+1, split_deck[i].tolist(), None) 
+        else: # Else init all bots
+            player_list[i+1] = Player(i+1, split_deck[i].tolist(), ai_style[i]) 
 
-    for player in player_list.values():
-        print("Player #" + str(player.show_id()) + "'s AI is " + player.get_ai())
+    """If you want to check what AI each bot has to check if their decisions are correct."""
+    #for player in player_list.values():
+        #print("Player #" + str(player.show_id()) + "'s AI is " + player.get_ai())
 
     # Begin running the battle simulation.
-    start_simulation(player_list, game_mode)
+    start_simulation(player_list)
     return
 
 def acquire_game_mode() -> int:
-    game_mode = input("What type of simulation would you like? \n1: Top-deck (AI plays first card drawn) \n" 
-                + "2: Strategic (AI plays randomly or highest value card from a hand of 5) \nEnter here: ")
+    game_mode = input("What type of game mode would you like? \n1: Play vs. Bots \n"
+                + "2: Simulate Bot vs. Bot \nEnter here: ")
     while not game_mode.isnumeric() or (game_mode.isnumeric() and int(game_mode) < 1) or (game_mode.isnumeric() and int(game_mode) > 2):
-        print("Please input the number 1 or 2 based on your selection.")
+        print("Please input the number 1 or 2 based on your selection.")  
 
-        game_mode = input("What type of simulation would you like? \n1: Top-deck (AI plays first card drawn) \n" 
-                + "2: Strategic (AI plays randomly or highest value card from a hand of 5) \nEnter here: ")
-    
+        game_mode = input("What type of game mode would you like? \n1: Play vs. Bots \n"
+                + "2: Simulate Bot vs. Bot \nEnter here: ")      
+
+    # Let the user know who they are.
+    if int(game_mode) == 1:
+        print("You will be referred to as Player #1 for the game.")
+
     return int(game_mode)
     
-def acquire_players() -> int:
-    # Figure out how many players will be playing so we can split the deck + deal accordingly.
-    num_players = input("How many players will be playing? ")
-    while not num_players.isnumeric() or (num_players.isnumeric() and int(num_players) < 2):
-        print("Please input a numeric value greater than or equal to 2.")
-            
-        num_players = input("How many players will be playing? ")
+def acquire_bots(game_mode) -> int:
+    # Figure out how many bots will be playing so we can split the deck + deal accordingly.
+    num_bots = input("How many bots will be playing? ")
+
+    if game_mode == 1: # Only requires 1 bot (opponent) if the user is playing themselves.
+        while not num_bots.isnumeric() or (num_bots.isnumeric() and int(num_bots) < 1):
+            print("Please input a numeric value greater than or equal to 1.")
+            num_bots = input("How many bots will be playing? ")
+
+    elif game_mode == 2: # Requires at least 2 bots to start a simulation since user isn't playing.
+        while not num_bots.isnumeric() or (num_bots.isnumeric() and int(num_bots) < 2):
+            print("Please input a numeric value greater than or equal to 2.")
+            num_bots = input("How many bots will be playing? ")
 
     # Confirm num_players is now an integer rather than an string containing a number.
-    return int(num_players)
+    return int(num_bots)
+
+def acquire_ai_type() -> int:
+    ai_type = input("What type of AI would you like? \n1: Top-deck (AI plays first card drawn) \n" 
+                + "2: Strategic (AI plays randomly or highest value card from a hand of 5) \nEnter here: ")
+    while not ai_type.isnumeric() or (ai_type.isnumeric() and int(ai_type) < 1) or (ai_type.isnumeric() and int(ai_type) > 2):
+        print("Please input the number 1 or 2 based on your selection.")
+
+        ai_type = input("What type of simulation would you like? \n1: Top-deck (AI plays first card drawn) \n" 
+                + "2: Strategic (AI plays randomly or highest value card from a hand of 5) \nEnter here: ")
+    return int(ai_type)
 
 def create_deck(num_players: int) -> list:
     # Deck consists of the numbers 1-12 with num_players copies of each, deck size is 12*num_players.
@@ -161,7 +211,7 @@ def deck_shuffle(deck: List[int]) -> list:
     # Do the shuffling here. Move the contents of the list/array randomly within itself.
     return numpy.random.shuffle(deck)
 
-def start_simulation(player_list: Dict, game_mode: int) -> None:
+def start_simulation(player_list: Dict) -> None:
 
     round_counter = 1
     # Keeps track of the current winner/highest, if size > 1 then there's a tie.
@@ -185,7 +235,8 @@ def start_simulation(player_list: Dict, game_mode: int) -> None:
 
         # Draw and play the card here.
         for player in player_list.values():
-            
+
+            # Real Players get to choose their card in here, refer to .play_card() definition.
             player.play_card() # Play the card according to their AI
 
             # Only draw if they have cards left in their battle deck.
@@ -224,7 +275,7 @@ def start_simulation(player_list: Dict, game_mode: int) -> None:
             # Indexed/key'd the player using the round_winner ID.
             player_list[round_winner[0]].get_cd().append(card)
 
-        print("Remaining Players: " + str(len(player_list)))
+        #print("Remaining Players: " + str(len(player_list)))
 
         round_counter += 1
         round_winner.clear() # Empty it between every round.
@@ -279,7 +330,7 @@ def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards:
 
             pooled_cards.append(player.show_played_card())
 
-    print("Remaining Players: " + str(len(player_list)))
+    #print("Remaining Players: " + str(len(player_list)))
 
     if len(round_winner) > 1:
         round_winner = exe_tiebreaker(player_list, round_winner, pooled_cards)
