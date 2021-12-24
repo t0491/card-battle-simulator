@@ -15,6 +15,13 @@ class Player:
         self.my_deck = my_deck # Contains the person's battle deck.
         self.bot_ai = bot_ai
         self.my_hand = [] # Holds the players drawn cards before playing.
+        # Set up by having each player draw 5 cards in their hand at first if strategic.
+        if self.bot_ai == 2 or self.bot_ai == 1:
+            for _ in range(5):
+                self.draw_card()
+        # Otherwise it doesn't matter and they'll play top-deck.
+        else:
+            self.draw_card()
         self.captured_deck = [] # Points/captured cards. Will be used as battle deck once that is empty.
         self.bot_ai = bot_ai # Configured for random or high value priority.
         self.played_card = None
@@ -179,18 +186,13 @@ def start_simulation(player_list: Dict, game_mode: int) -> None:
         # Draw and play the card here.
         for player in player_list.values():
             
+            player.play_card() # Play the card according to their AI
+
             # Only draw if they have cards left in their battle deck.
             # If they don't then they should still have cards left in their hand to play.
             # They would have been eliminated if their hand, bd, and cd were all empty.
             if len(player.get_bd()) > 0:
-                # Set up by having each player draw 5 cards in their hand at first if strategic.
-                if game_mode == 2 and round_counter == 1:
-                    for _ in range(5):
-                        player.draw_card()
-                # Otherwise it doesn't matter and they'll play top-deck.
-                else:
-                    player.draw_card()
-            player.play_card() # Play the card according to their AI
+                player.draw_card()
 
             # print the hand below if you want to check and see if the AI is playing correctly by their "bot_ai"
             # print("Player #" + str(player.show_id() + "'s hand: " + player.show_hand())
@@ -259,10 +261,10 @@ def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards:
         if player.show_id() in old_round_winner:
 
             # Draw and play the card here.
+            player.play_card()
             # Once again, only draw if there are cards left in bd.
             if len(player.get_bd()) > 0:
                 player.draw_card()
-            player.play_card()
         
             # Compare the played card results here.
             print("Player #" + str(player.show_id()) + " plays, " + str(player.show_played_card()) + "!")
@@ -278,7 +280,7 @@ def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards:
             pooled_cards.append(player.show_played_card())
 
     print("Remaining Players: " + str(len(player_list)))
-    
+
     if len(round_winner) > 1:
         round_winner = exe_tiebreaker(player_list, round_winner, pooled_cards)
 
@@ -296,7 +298,7 @@ def eliminate_empty_players(player_list: Dict) -> None:
         # If they still have cards in their battle deck or in their hand, they aren't eliminated.
         elif len(player.get_bd()) > 0 or len(player.show_hand()) > 0:
             continue
-        # If both decks empty, eliminate.
+        # If both decks empty, eliminate. Should only end up here if their hand is empty as well.
         elif len(player.get_bd()) == 0 and len(player.get_cd()) == 0:
             to_be_elimd.append(player.show_id())
 
