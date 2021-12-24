@@ -6,8 +6,7 @@
 
 from typing import Dict, List
 import numpy
-from numpy.lib.shape_base import split
-
+import random
 
 class Player: 
     # Init for the Player
@@ -28,14 +27,34 @@ class Player:
     def get_cd(self) -> list:
         return self.captured_deck
 
+    def get_ai(self) -> str:
+        if self.bot_ai == None:
+            return "Top-deck"
+        elif self.bot_ai == 1:
+            return "Random"
+        elif self.bot_ai == 2:
+            return "Highest"
+
     # Takes the top card out of their battle deck and adds it into their hand.
     def draw_card(self) -> None:
         self.my_hand.append(self.my_deck.pop())
     
     # Sets the inputted card as the player's played_card.
-    def play_card(self, card: int) -> int:
-        self.my_hand.remove(card) # Remove that card from the player's hand, it has been played.
-        self.played_card = card
+    def play_card(self) -> int:
+        if self.bot_ai == None: # Top-deck AI
+            self.played_card = self.my_hand.pop(0) # Remove the first card in hand.
+        elif self.bot_ai == 1: # Random AI
+            self.played_card = self.my_hand.pop(random.randint(0,len(self.my_hand)-1)) # Choose a random card (index) in their hand.
+        elif self.bot_ai == 2: # Highest Val AI
+            """ THIS WORKS PROPERLY, I WAS CONFUSED AT FIRST SEEING THAT THE AI PLAYED A HIGHER VALUE CARD
+                THAN THE PREVIOUS ROUND, BUT IT WAS BECAUSE IT JUST DREW INTO THE HIGHER VALUE CARD.
+                e.g. ROUND 1 PLAYS: 11
+                     ROUND 2 PLAYS: 12
+                HAND WAS [11, 2, 3, 4, 5] AT ROUND 1 BUT ROUND 2 IT DREW INTO 12 SO IT BECAME [2, 3, 4, 5, 12]"""
+            highest_card = max(self.my_hand) # Determine highest value.
+            #print(highest_card)
+            self.played_card = highest_card
+            self.my_hand.remove(max(self.my_hand)) # Remove that specific card from hand once played.
     
     # Allocates all of the round winnings into the player's win pile/captured deck.
     def capture_card(self, card: int) -> None:
@@ -52,13 +71,26 @@ class Player:
 
     # Copy over all of the captured cards to battle and then clear the captured.
     def transfer_cd_to_bd(self) -> int:
-        self.my_deck = self.captured_deck
+        self.my_deck = self.captured_deck.copy()
         self.captured_deck.clear()
 
 def main() -> None:
     
     # Prompts user for # of players to setup the game.
     num_players = acquire_players()
+
+    # Determines if we are doing top-deck or strategic.
+    ai_style = []
+    game_mode = acquire_game_mode()
+
+    # Top-deck, then there is no AI choice pattern.
+    if game_mode == 1:
+        for i in range(num_players):
+            ai_style.append(None)
+    # Strategic, we allocate them as Random(1) or Highest Value(2) then.
+    elif game_mode == 2:
+        for i in range(num_players):
+            ai_style.append(random.randint(1,2))
 
     # Generates the deck based on # of players + shuffles it.
     game_deck = create_deck(num_players)
@@ -71,12 +103,26 @@ def main() -> None:
 
     # Give them their decks as well.
     for i in range(num_players):
-        player_list[i+1] = Player(i+1, split_deck[i].tolist(), None)
-    
+        player_list[i+1] = Player(i+1, split_deck[i].tolist(), ai_style[i])
+
+    for player in player_list.values():
+        print("Player #" + str(player.show_id()) + "'s AI is " + player.get_ai())
+
     # Begin running the battle simulation.
-    start_simulation(player_list)
+    start_simulation(player_list, game_mode)
     return
 
+def acquire_game_mode() -> int:
+    game_mode = input("What type of simulation would you like? \n1: Top-deck (AI plays first card drawn) \n" 
+                + "2: Strategic (AI plays randomly or highest value card from a hand of 5) \nEnter here: ")
+    while not game_mode.isnumeric() or (game_mode.isnumeric() and int(game_mode) < 1) or (game_mode.isnumeric() and int(game_mode) > 2):
+        print("Please input the number 1 or 2 based on your selection.")
+
+        game_mode = input("What type of simulation would you like? \n1: Top-deck (AI plays first card drawn) \n" 
+                + "2: Strategic (AI plays randomly or highest value card from a hand of 5) \nEnter here: ")
+    
+    return int(game_mode)
+    
 def acquire_players() -> int:
     # Figure out how many players will be playing so we can split the deck + deal accordingly.
     num_players = input("How many players will be playing? ")
@@ -108,24 +154,46 @@ def deck_shuffle(deck: List[int]) -> list:
     # Do the shuffling here. Move the contents of the list/array randomly within itself.
     return numpy.random.shuffle(deck)
 
-def start_simulation(player_list: Dict) -> None:
-    # Keep playing until there is 1 remaining player.
+def start_simulation(player_list: Dict, game_mode: int) -> None:
+
     round_counter = 1
     # Keeps track of the current winner/highest, if size > 1 then there's a tie.
     round_winner = []
     # Keeps track of current winnings pool.
     pooled_cards = []
-    while len(player_list) > 1:
+
+    # Keep playing until there is 1 remaining player.
+    while True:
+        # Removes any players with no cards remaining.
+        eliminate_empty_players(player_list)
+
+        # Breaks the while loop and ends the game once there is one player remaining.
+        if len(player_list) < 2:
+            break
 
         print("### Round " + str(round_counter)+ " ###")
 
         # Keeps track of current highest value card.
         highest_card = 0
+
         # Draw and play the card here.
         for player in player_list.values():
-            # Simulates playing with only top decking.
-            player.draw_card() # This card enters the player's hand.
-            player.play_card(player.show_hand()[0]) # Plays the first drawn card from their hand.
+            
+            # Only draw if they have cards left in their battle deck.
+            # If they don't then they should still have cards left in their hand to play.
+            # They would have been eliminated if their hand, bd, and cd were all empty.
+            if len(player.get_bd()) > 0:
+                # Set up by having each player draw 5 cards in their hand at first if strategic.
+                if game_mode == 2 and round_counter == 1:
+                    for _ in range(5):
+                        player.draw_card()
+                # Otherwise it doesn't matter and they'll play top-deck.
+                else:
+                    player.draw_card()
+            player.play_card() # Play the card according to their AI
+
+            # print the hand below if you want to check and see if the AI is playing correctly by their "bot_ai"
+            # print("Player #" + str(player.show_id() + "'s hand: " + player.show_hand())
             print("Player #" + str(player.show_id()) + " plays, " + str(player.show_played_card()) + "!")
 
             # Compare the played card results here.
@@ -140,8 +208,7 @@ def start_simulation(player_list: Dict) -> None:
 
             # Everyone pools their cards into the middle per play.
             pooled_cards.append(player.show_played_card())
-        
-        #print(round_winner)
+
         if len(round_winner) > 1:
             # Execute the tiebreaker here, perhaps recurses until the tie finally resolves.
             round_winner = exe_tiebreaker(player_list, round_winner, pooled_cards)
@@ -155,25 +222,43 @@ def start_simulation(player_list: Dict) -> None:
             # Indexed/key'd the player using the round_winner ID.
             player_list[round_winner[0]].get_cd().append(card)
 
-        # Removes any players with no cards remaining.
-        eliminate_empty_players(player_list)
+        print("Remaining Players: " + str(len(player_list)))
 
         round_counter += 1
         round_winner.clear() # Empty it between every round.
         pooled_cards.clear()
+    
+    # Should only print once for the last remaining player.
+    for player in player_list.values():
+        print("### GAME OVER ###")
+        print("Player #" + str(player.show_id()) + " is the winner of Card Battle Royale!")
+
+        # Should total up to 12 * num_players.
+        print("They have collected all " + str(len(player.get_bd()) + len(player.get_cd()) + len(player.show_hand())) + " cards!")
     return
 
 # Returns the ID of the tie winner, may recurse.
 # If it does recurse, the new inputted round_winner will dwindle down and remove any losers of the tiebreaker.
 def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards: List[int]) -> int:
+
+    # Removes any players with no cards remaining.
+    eliminate_empty_players(player_list)
+
+    # End the tiebreaker phase if there are no other players to play.
+    if len(player_list) < 2:
+        return
+
     print("### TIE BREAKER ###")
     round_winner = []
     for player in player_list.values():
         #print(len(player_list))
         if player.show_id() in old_round_winner:
+
             # Draw and play the card here.
-            player.draw_card()
-            player.play_card(player.show_hand()[0])
+            # Once again, only draw if there are cards left in bd.
+            if len(player.get_bd()) > 0:
+                player.draw_card()
+            player.play_card()
         
             # Compare the played card results here.
             highest_card = 0
@@ -192,9 +277,7 @@ def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards:
     if len(round_winner) > 1:
         round_winner = exe_tiebreaker(player_list, round_winner, pooled_cards)
 
-    # Removes any players with no cards remaining.
-    eliminate_empty_players(player_list)
-
+    print("Remaining Players: " + str(len(player_list)))
     # In order for the recursion to stop, the returned round winner must be a size of 1.
     return round_winner
 
@@ -202,7 +285,8 @@ def eliminate_empty_players(player_list: Dict) -> None:
     # Check player deck/resources now. If they are 0, then the player is eliminated.
     to_be_elimd = []
     for player in player_list.values():
-        if len(player.get_bd()) > 0:
+        # If they still have cards in their battle deck or in their hand, they aren't eliminated.
+        if len(player.get_bd()) > 0 or len(player.show_hand()):
             continue
         # If they have captured cards, turn it into their battle cards.
         elif len(player.get_bd()) == 0 and len(player.get_cd()) > 0:
@@ -214,4 +298,6 @@ def eliminate_empty_players(player_list: Dict) -> None:
 
     for i in to_be_elimd:
         player_list.pop(i)
+    
+    return
 main()
