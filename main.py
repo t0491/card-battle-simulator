@@ -239,17 +239,21 @@ def start_simulation(player_list: Dict, game_mode: int) -> None:
 
 # Returns the ID of the tie winner, may recurse.
 # If it does recurse, the new inputted round_winner will dwindle down and remove any losers of the tiebreaker.
-def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards: List[int]) -> int:
-
+def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards: List[int]) -> list:
+    
     # Removes any players with no cards remaining.
     eliminate_empty_players(player_list)
 
+    highest_card = 0
+    round_winner = []
     # End the tiebreaker phase if there are no other players to play.
+    # Return the last remaining player as the round_winner
     if len(player_list) < 2:
-        return
+        for player in player_list.values():
+            round_winner.append()
+        return round_winner
 
     print("### TIE BREAKER ###")
-    round_winner = []
     for player in player_list.values():
         #print(len(player_list))
         if player.show_id() in old_round_winner:
@@ -261,7 +265,6 @@ def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards:
             player.play_card()
         
             # Compare the played card results here.
-            highest_card = 0
             print("Player #" + str(player.show_id()) + " plays, " + str(player.show_played_card()) + "!")
             # Update the new highest card.
             if player.show_played_card() > highest_card:
@@ -274,10 +277,11 @@ def exe_tiebreaker(player_list: Dict, old_round_winner: List[int], pooled_cards:
 
             pooled_cards.append(player.show_played_card())
 
+    print("Remaining Players: " + str(len(player_list)))
+    
     if len(round_winner) > 1:
         round_winner = exe_tiebreaker(player_list, round_winner, pooled_cards)
 
-    print("Remaining Players: " + str(len(player_list)))
     # In order for the recursion to stop, the returned round winner must be a size of 1.
     return round_winner
 
@@ -285,13 +289,13 @@ def eliminate_empty_players(player_list: Dict) -> None:
     # Check player deck/resources now. If they are 0, then the player is eliminated.
     to_be_elimd = []
     for player in player_list.values():
-        # If they still have cards in their battle deck or in their hand, they aren't eliminated.
-        if len(player.get_bd()) > 0 or len(player.show_hand()):
-            continue
         # If they have captured cards, turn it into their battle cards.
-        elif len(player.get_bd()) == 0 and len(player.get_cd()) > 0:
+        if len(player.get_bd()) == 0 and len(player.get_cd()) > 0:
             player.transfer_cd_to_bd()
             deck_shuffle(player.get_bd()) # Shuffle it afterwards.
+        # If they still have cards in their battle deck or in their hand, they aren't eliminated.
+        elif len(player.get_bd()) > 0 or len(player.show_hand()) > 0:
+            continue
         # If both decks empty, eliminate.
         elif len(player.get_bd()) == 0 and len(player.get_cd()) == 0:
             to_be_elimd.append(player.show_id())
