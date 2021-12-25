@@ -1,15 +1,3 @@
-# Simulate a card battle between N players.
-# User may choose to play vs. bots or watch bots play each other.
-# Shuffle the deck and split it into N equal parts.
-# Each player will receive their split of the deck as their "battle deck".
-# Players will then draw up to 5 cards into their hand depending on the game mode.
-# Players will simultaneously choose which card to play from their hand depending on their AI.
-# The player that played the highest value card will then capture all played cards as score under the "captured deck".
-# This "captured deck" will become the player's "battle deck" in the event that their battle deck is empty.
-# In the event of a tie, the players will repeat the draw and play phase until there is one clear winner.
-# If any player runs out of cards they are eliminated from the game.
-# The last remaining player (should have possession of all the cards, N * 12 cards) is the winner.
-
 from typing import Dict, List
 import numpy
 import random
