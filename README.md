@@ -1,2 +1,2 @@
 # card battle simulator
- Project submission for Terrastruct
+ Card Battle Royale project submission for Terrastruct.
